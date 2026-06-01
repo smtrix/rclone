@@ -229,6 +229,20 @@ a write only folder.
 `,
 			Advanced: true,
 		}, {
+			Name: "charset",
+			Help: `FTP charset encoding.
+
+If the FTP server uses a non-UTF-8 character encoding, set this to
+the encoding name. For example, "GBK" for Chinese, "Shift_JIS" for
+Japanese, "EUC-KR" for Korean, etc.
+
+This will convert all FTP commands and responses between UTF-8 and
+the specified charset.
+
+See the full list of supported encodings in the documentation.`,
+			Default:  "",
+			Advanced: true,
+		}, {
 			Name:     config.ConfigEncoding,
 			Help:     config.ConfigEncodingHelp,
 			Advanced: true,
@@ -272,6 +286,7 @@ type Options struct {
 	CloseTimeout            fs.Duration          `config:"close_timeout"`
 	ShutTimeout             fs.Duration          `config:"shut_timeout"`
 	AskPassword             bool                 `config:"ask_password"`
+	Charset                 string               `config:"charset"`
 	Enc                     encoder.MultiEncoder `config:"encoding"`
 	SocksProxy              string               `config:"socks_proxy"`
 	HTTPProxy               string               `config:"http_proxy"`
@@ -544,6 +559,10 @@ func (f *Fs) ftpConnection(ctx context.Context) (c *ftp.ServerConn, err error) {
 		c, err = ftp.Dial(f.dialAddr, ftpConfig...)
 		if err != nil {
 			return shouldRetry(ctx, err)
+		}
+		// Set charset options before login
+		if f.opt.Charset != "" {
+			c.SetOptions(&ftp.Options{Charset: f.opt.Charset})
 		}
 		err = c.Login(f.user, f.pass)
 		if err != nil {
