@@ -4,6 +4,7 @@
 package ftp
 
 import (
+"fmt"
 	"bufio"
 	"context"
 	"crypto/tls"
@@ -63,6 +64,9 @@ type ServerConn struct {
 	mdtmSupported bool
 	mdtmCanWrite  bool
 	usePRET       bool
+
+	// Charset options for encoding conversion
+	ftpOptions *Options
 }
 
 // DialOption represents an option to start a new connection with Dial
@@ -602,12 +606,39 @@ func (c *ServerConn) openDataConn() (net.Conn, error) {
 // cmd is a helper function to execute a command and check for the expected FTP
 // return code
 func (c *ServerConn) cmd(expected int, format string, args ...interface{}) (int, string, error) {
-	_, err := c.conn.Cmd(format, args...)
+	// Build the command line
+	line := fmt.Sprintf(format, args...)
+
+	// Apply path quoting for commands that take path arguments
+	line = quotePathInCommand(line)
+
+	// Apply charset encoding to the entire line (UTF-8 -> target charset)
+	if c.ftpOptions != nil && c.ftpOptions.Charset != "" {
+		var encErr error
+		line, encErr = encodeUTF8ToCharset(line, c.ftpOptions.Charset)
+		if encErr != nil {
+			return 0, "", encErr
+		}
+	}
+
+	// Send the command
+	_, err := c.conn.Cmd(line)
 	if err != nil {
 		return 0, "", err
 	}
 
-	return c.conn.ReadResponse(expected)
+	// Read the response
+	code, message, err := c.conn.ReadResponse(expected)
+
+	// Decode the response from target charset to UTF-8
+	if c.ftpOptions != nil && c.ftpOptions.Charset != "" && err == nil {
+		decoded, decodeErr := decodeCharsetToUTF8([]byte(message), c.ftpOptions.Charset)
+		if decodeErr == nil {
+			message = decoded
+		}
+	}
+
+	return code, message, err
 }
 
 // cmdDataConnFrom executes a command which require a FTP data connection.
@@ -635,7 +666,19 @@ func (c *ServerConn) cmdDataConnFrom(offset uint64, format string, args ...inter
 		}
 	}
 
-	_, err = c.conn.Cmd(format, args...)
+	// Build the command line with path quoting and charset encoding
+	line := fmt.Sprintf(format, args...)
+	line = quotePathInCommand(line)
+	if c.ftpOptions != nil && c.ftpOptions.Charset != "" {
+		var encErr error
+		line, encErr = encodeUTF8ToCharset(line, c.ftpOptions.Charset)
+		if encErr != nil {
+			_ = conn.Close()
+			return nil, encErr
+		}
+	}
+
+	_, err = c.conn.Cmd(line)
 	if err != nil {
 		_ = conn.Close()
 		return nil, err
@@ -677,7 +720,15 @@ func (c *ServerConn) NameList(path string) (entries []string, err error) {
 
 	scanner := bufio.NewScanner(c.options.wrapStream(r))
 	for scanner.Scan() {
-		entries = append(entries, scanner.Text())
+		line := scanner.Text()
+		// Decode from target charset to UTF-8
+		if c.ftpOptions != nil && c.ftpOptions.Charset != "" {
+			decoded, decodeErr := decodeCharsetToUTF8([]byte(line), c.ftpOptions.Charset)
+			if decodeErr == nil {
+				line = decoded
+			}
+		}
+		entries = append(entries, line)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -722,7 +773,15 @@ func (c *ServerConn) List(path string) (entries []*Entry, err error) {
 	scanner := bufio.NewScanner(c.options.wrapStream(r))
 	now := time.Now()
 	for scanner.Scan() {
-		entry, errParse := parser(scanner.Text(), now, c.options.location)
+		line := scanner.Text()
+		// Decode from target charset to UTF-8
+		if c.ftpOptions != nil && c.ftpOptions.Charset != "" {
+			decoded, decodeErr := decodeCharsetToUTF8([]byte(line), c.ftpOptions.Charset)
+			if decodeErr == nil {
+				line = decoded
+			}
+		}
+		entry, errParse := parser(line, now, c.options.location)
 		if errParse == nil {
 			entries = append(entries, entry)
 		}

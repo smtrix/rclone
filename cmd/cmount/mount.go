@@ -18,6 +18,8 @@ import (
 	"github.com/rclone/rclone/lib/atexit"
 	"github.com/rclone/rclone/lib/buildinfo"
 	"github.com/rclone/rclone/vfs"
+	"github.com/rclone/rclone/vfs/vfscommon"
+	"github.com/rclone/rclone/vfs/vfsutil"
 	"github.com/winfsp/cgofuse/fuse"
 )
 
@@ -132,6 +134,9 @@ func mount(VFS *vfs.VFS, mountPath string, opt *mountlib.Options) (<-chan error,
 		return nil, nil, "", err
 	}
 	fs.Debugf(nil, "Mounting on %q (%q)", mountpoint, opt.VolumeName)
+
+	// Sync the NoVFSQuoteNames flag from VFS options to the global vfsutil flag
+	vfsutil.NoVFSQuoteNames = vfscommon.Opt.NoVFSQuoteNames
 
 	// Create underlying FS
 	fsys := NewFS(VFS, opt)

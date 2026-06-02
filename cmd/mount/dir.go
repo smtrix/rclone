@@ -17,6 +17,7 @@ import (
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/log"
 	"github.com/rclone/rclone/vfs"
+	"github.com/rclone/rclone/vfs/vfsutil"
 )
 
 // Dir represents a directory entry
@@ -117,7 +118,7 @@ func (d *Dir) ReadDirAll(ctx context.Context) (dirents []fuse.Dirent, err error)
 		Name: "..",
 	})
 	for _, node := range items {
-		name := node.Name()
+		name := vfsutil.EscapeName(node.Name())
 		if len(name) > mountlib.MaxLeafSize {
 			fs.Errorf(d, "Name too long (%d bytes) for FUSE, skipping: %s", len(name), name)
 			continue

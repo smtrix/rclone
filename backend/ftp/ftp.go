@@ -242,14 +242,16 @@ the specified charset.
 See the full list of supported encodings in the documentation.`,
 			Default:  "",
 			Advanced: true,
-		}, {
-			Name:     config.ConfigEncoding,
-			Help:     config.ConfigEncodingHelp,
-			Advanced: true,
-			// The FTP protocol can't handle trailing spaces
-			// (for instance, pureftpd turns them into '_')
-			Default: (encoder.Display |
-				encoder.EncodeRightSpace),
+	}, {
+		Name:     config.ConfigEncoding,
+		Help:     config.ConfigEncodingHelp,
+		Advanced: true,
+		// The FTP protocol can't handle trailing spaces
+		// (for instance, pureftpd turns them into '_')
+		Default: (encoder.Display |
+			encoder.EncodeRightSpace),
+		// Note: EncodeRightSpace can be disabled with --no-vfs-quote-names
+		// for compatibility with FileBrowser and similar tools
 			Examples: []fs.OptionExample{{
 				Value: "Asterisk,Ctl,Dot,Slash",
 				Help:  "ProFTPd can't handle '*' in file names",

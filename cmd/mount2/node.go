@@ -14,6 +14,7 @@ import (
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/log"
 	"github.com/rclone/rclone/vfs"
+	"github.com/rclone/rclone/vfs/vfsutil"
 )
 
 // Node represents a directory or file
@@ -257,7 +258,7 @@ func (ds *dirStream) Next() (de fuse.DirEntry, errno syscall.Errno) {
 		Mode: getMode(fi),
 
 		// Name is the basename of the file in the directory.
-		Name: path.Base(fi.Name()),
+		Name: vfsutil.EscapeName(path.Base(fi.Name())),
 
 		// Ino is the inode number.
 		Ino: 0, // FIXME
