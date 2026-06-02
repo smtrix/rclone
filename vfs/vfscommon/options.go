@@ -175,6 +175,11 @@ var OptionsInfo = fs.Options{{
 	Default: "",
 	Help:    "Set the extension to read metadata from.",
 	Groups:  "VFS",
+}, {
+	Name:    "no_vfs_quote_names",
+	Default: false,
+	Help:    "Disable quoting of special characters in file names (e.g. for FileBrowser compatibility)",
+	Groups:  "VFS",
 }}
 
 func init() {
@@ -216,6 +221,7 @@ type Options struct {
 	DiskSpaceTotalSize fs.SizeSuffix `config:"vfs_disk_space_total_size"`
 	HandleCaching      fs.Duration   `config:"vfs_handle_caching"`     // time to keep handle alive after last close
 	MetadataExtension  string        `config:"vfs_metadata_extension"` // if set respond to files with this extension with metadata
+	NoVFSQuoteNames    bool          `config:"no_vfs_quote_names"`     // if set, disable quoting of special characters in file names
 }
 
 // Opt is the default options modified by the environment variables and command line flags

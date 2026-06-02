@@ -13,6 +13,8 @@ import (
 	"github.com/rclone/rclone/cmd/mountlib"
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/vfs"
+	"github.com/rclone/rclone/vfs/vfscommon"
+	"github.com/rclone/rclone/vfs/vfsutil"
 )
 
 func init() {
@@ -186,6 +188,9 @@ func mountOptions(fsys *FS, f fs.Fs, opt *mountlib.Options) (mountOpts *fuse.Mou
 // returns an error, and an error channel for the serve process to
 // report an error when fusermount is called.
 func mount(VFS *vfs.VFS, mountpoint string, opt *mountlib.Options) (<-chan error, func() error, string, error) {
+	// Sync the NoVFSQuoteNames flag from VFS options to the global vfsutil flag
+	vfsutil.NoVFSQuoteNames = vfscommon.Opt.NoVFSQuoteNames
+
 	f := VFS.Fs()
 	if err := mountlib.CheckOverlap(f, mountpoint); err != nil {
 		return nil, nil, "", err

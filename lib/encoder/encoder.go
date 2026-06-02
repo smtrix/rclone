@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/rclone/rclone/vfs/vfsutil"
 )
 
 const (
@@ -276,7 +278,7 @@ func (mask MultiEncoder) Encode(in string) string {
 	// handle suffix only replacements
 	suffix := ""
 	if in != "" {
-		if mask.Has(EncodeRightSpace) { // Trailing SPACE
+		if mask.Has(EncodeRightSpace) && !vfsutil.NoVFSQuoteNames { // Trailing SPACE
 			if in[len(in)-1] == ' ' {
 				suffix, in = "␠", in[:len(in)-1] // SYMBOL FOR SPACE
 			} else if r, l := utf8.DecodeLastRuneInString(in); r == '␠' {
