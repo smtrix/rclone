@@ -4,11 +4,11 @@
 package ftp
 
 import (
-"fmt"
 	"bufio"
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/textproto"
@@ -76,19 +76,20 @@ type DialOption struct {
 
 // dialOptions contains all the options set by DialOption.setup
 type dialOptions struct {
-	context         context.Context
-	dialer          net.Dialer
-	tlsConfig       *tls.Config
-	explicitTLS     bool
-	disableEPSV     bool
-	disableUTF8     bool
-	disableMLSD     bool
-	writingMDTM     bool
-	forceListHidden bool
-	location        *time.Location
-	debugOutput     io.Writer
-	dialFunc        func(network, address string) (net.Conn, error)
-	shutTimeout     time.Duration // time to wait for data connection closing status
+	context            context.Context
+	dialer             net.Dialer
+	tlsConfig          *tls.Config
+	explicitTLS        bool
+	disableEPSV        bool
+	disableUTF8        bool
+	disableMLSD        bool
+	writingMDTM        bool
+	forceListHidden    bool
+	disablePathQuoting bool
+	location           *time.Location
+	debugOutput        io.Writer
+	dialFunc           func(network, address string) (net.Conn, error)
+	shutTimeout        time.Duration // time to wait for data connection closing status
 }
 
 // Entry describes a file and is returned by List().
@@ -610,7 +611,7 @@ func (c *ServerConn) cmd(expected int, format string, args ...interface{}) (int,
 	line := fmt.Sprintf(format, args...)
 
 	// Apply path quoting for commands that take path arguments
-	line = quotePathInCommand(line)
+	line = quotePathInCommand(line, c.options.disablePathQuoting)
 
 	// Apply charset encoding to the entire line (UTF-8 -> target charset)
 	if c.ftpOptions != nil && c.ftpOptions.Charset != "" {
@@ -668,7 +669,7 @@ func (c *ServerConn) cmdDataConnFrom(offset uint64, format string, args ...inter
 
 	// Build the command line with path quoting and charset encoding
 	line := fmt.Sprintf(format, args...)
-	line = quotePathInCommand(line)
+	line = quotePathInCommand(line, c.options.disablePathQuoting)
 	if c.ftpOptions != nil && c.ftpOptions.Charset != "" {
 		var encErr error
 		line, encErr = encodeUTF8ToCharset(line, c.ftpOptions.Charset)

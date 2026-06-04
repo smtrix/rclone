@@ -242,16 +242,16 @@ the specified charset.
 See the full list of supported encodings in the documentation.`,
 			Default:  "",
 			Advanced: true,
-	}, {
-		Name:     config.ConfigEncoding,
-		Help:     config.ConfigEncodingHelp,
-		Advanced: true,
-		// The FTP protocol can't handle trailing spaces
-		// (for instance, pureftpd turns them into '_')
-		Default: (encoder.Display |
-			encoder.EncodeRightSpace),
-		// Note: EncodeRightSpace can be disabled with --no-vfs-quote-names
-		// for compatibility with FileBrowser and similar tools
+		}, {
+			Name:     config.ConfigEncoding,
+			Help:     config.ConfigEncodingHelp,
+			Advanced: true,
+			// The FTP protocol can't handle trailing spaces
+			// (for instance, pureftpd turns them into '_')
+			Default: (encoder.Display |
+				encoder.EncodeRightSpace),
+			// Note: EncodeRightSpace can be disabled with --no-vfs-quote-names
+			// for compatibility with FileBrowser and similar tools
 			Examples: []fs.OptionExample{{
 				Value: "Asterisk,Ctl,Dot,Slash",
 				Help:  "ProFTPd can't handle '*' in file names",
@@ -262,6 +262,18 @@ See the full list of supported encodings in the documentation.`,
 				Value: "Ctl,LeftPeriod,Slash",
 				Help:  "VsFTPd can't handle file names starting with dot",
 			}},
+		}, {
+			Name: "fix_servu_list_quotes",
+			Help: `Fix Serv-U list quotes issue.
+
+When enabled, rclone will not add double quotes around paths in LIST
+commands. This is needed for Serv-U FTP v10.3 servers which do not
+recognize quoted paths.
+
+Set to true if you encounter issues accessing directories with spaces
+or Chinese characters on Serv-U servers.`,
+			Default:  false,
+			Advanced: true,
 		}},
 	})
 }
@@ -293,6 +305,7 @@ type Options struct {
 	SocksProxy              string               `config:"socks_proxy"`
 	HTTPProxy               string               `config:"http_proxy"`
 	NoCheckUpload           bool                 `config:"no_check_upload"`
+	FixServuListQuotes      bool                 `config:"fix_servu_list_quotes"`
 }
 
 // Fs represents a remote FTP server
@@ -562,9 +575,12 @@ func (f *Fs) ftpConnection(ctx context.Context) (c *ftp.ServerConn, err error) {
 		if err != nil {
 			return shouldRetry(ctx, err)
 		}
-		// Set charset options before login
-		if f.opt.Charset != "" {
-			c.SetOptions(&ftp.Options{Charset: f.opt.Charset})
+		// Set charset and path quoting options before login
+		if f.opt.Charset != "" || f.opt.FixServuListQuotes {
+			c.SetOptions(&ftp.Options{
+				Charset:            f.opt.Charset,
+				DisablePathQuoting: f.opt.FixServuListQuotes,
+			})
 		}
 		err = c.Login(f.user, f.pass)
 		if err != nil {

@@ -22,6 +22,11 @@ type Options struct {
 	// Charset is the character encoding to use for FTP commands and responses.
 	// If empty, UTF-8 is used.
 	Charset string
+
+	// DisablePathQuoting disables adding double quotes around paths in FTP
+	// commands. This is needed for some FTP servers (e.g. Serv-U v10.3)
+	// that do not recognize quoted paths in LIST commands.
+	DisablePathQuoting bool
 }
 
 // DialWithTLSNoHandshake returns a DialOption that configures the ServerConn with specified TLS config
@@ -207,7 +212,15 @@ func decodeCharsetToUTF8(data []byte, charset string) (string, error) {
 //
 // The format is: "COMMAND path" or "COMMAND arg1 arg2" (for RNFR/RNTO
 // the second token is the path; for MFMT the third token is the path).
-func quotePathInCommand(line string) string {
+//
+// If disableQuoting is true, the line is returned as-is without any
+// quoting. This is needed for FTP servers (e.g. Serv-U v10.3) that
+// do not recognize quoted paths.
+func quotePathInCommand(line string, disableQuoting bool) string {
+	// If path quoting is disabled, return the line as-is
+	if disableQuoting {
+		return line
+	}
 	// Split into command and arguments
 	parts := strings.SplitN(line, " ", 2)
 	if len(parts) < 2 {
@@ -219,36 +232,36 @@ func quotePathInCommand(line string) string {
 
 	// Commands that take a single path argument
 	singlePathCmds := map[string]bool{
-		"CWD":   true,
-		"RETR":  true,
-		"STOR":  true,
-		"APPE":  true,
-		"DELE":  true,
-		"MKD":   true,
-		"RMD":   true,
-		"PWD":   true,
-		"LIST":  true,
-		"NLST":  true,
-		"MLSD":  true,
-		"STAT":  true,
-		"XCWD":  true,
-		"XMKD":  true,
-		"XRMD":  true,
-		"SIZE":  true,
-		"MDTM":  true,
-		"CDUP":  true,
-		"NOOP":  true,
-		"QUIT":  true,
-		"TYPE":  true,
-		"PASS":  true,
-		"USER":  true,
-		"ACCT":  true,
-		"SMNT":  true,
-		"REIN":  true,
-		"ALLO":  true,
-		"SYST":  true,
-		"HELP":  true,
-		"ABOR":  true,
+		"CWD":  true,
+		"RETR": true,
+		"STOR": true,
+		"APPE": true,
+		"DELE": true,
+		"MKD":  true,
+		"RMD":  true,
+		"PWD":  true,
+		"LIST": true,
+		"NLST": true,
+		"MLSD": true,
+		"STAT": true,
+		"XCWD": true,
+		"XMKD": true,
+		"XRMD": true,
+		"SIZE": true,
+		"MDTM": true,
+		"CDUP": true,
+		"NOOP": true,
+		"QUIT": true,
+		"TYPE": true,
+		"PASS": true,
+		"USER": true,
+		"ACCT": true,
+		"SMNT": true,
+		"REIN": true,
+		"ALLO": true,
+		"SYST": true,
+		"HELP": true,
+		"ABOR": true,
 	}
 
 	// Commands that take two path arguments (RNFR, RNTO)
