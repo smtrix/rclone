@@ -611,7 +611,11 @@ func (c *ServerConn) cmd(expected int, format string, args ...interface{}) (int,
 	line := fmt.Sprintf(format, args...)
 
 	// Apply path quoting for commands that take path arguments
-	line = quotePathInCommand(line, c.options.disablePathQuoting)
+	disableQuoting := c.options.disablePathQuoting
+	if c.ftpOptions != nil && c.ftpOptions.DisablePathQuoting {
+		disableQuoting = true
+	}
+	line = quotePathInCommand(line, disableQuoting)
 
 	// Apply charset encoding to the entire line (UTF-8 -> target charset)
 	if c.ftpOptions != nil && c.ftpOptions.Charset != "" {
@@ -669,7 +673,11 @@ func (c *ServerConn) cmdDataConnFrom(offset uint64, format string, args ...inter
 
 	// Build the command line with path quoting and charset encoding
 	line := fmt.Sprintf(format, args...)
-	line = quotePathInCommand(line, c.options.disablePathQuoting)
+	disableQuoting := c.options.disablePathQuoting
+	if c.ftpOptions != nil && c.ftpOptions.DisablePathQuoting {
+		disableQuoting = true
+	}
+	line = quotePathInCommand(line, disableQuoting)
 	if c.ftpOptions != nil && c.ftpOptions.Charset != "" {
 		var encErr error
 		line, encErr = encodeUTF8ToCharset(line, c.ftpOptions.Charset)

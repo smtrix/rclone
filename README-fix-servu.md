@@ -1,86 +1,65 @@
-# rclone FTP 后端 Serv-U v10.3 兼容性修复
+# Rclone Serv-U v10 FTP 修复说明
 
-## 问题描述
+## 版本信息
+- **版本号**: v1.75.0-dev
+- **基于**: rclone v1.75.0
+- **修复日期**: 2025-06-04
 
-Serv-U FTP v10.3（Windows + GBK 编码）服务器无法识别带双引号的 LIST 命令路径。
+## 修复内容
 
-### 症状
-- rclone 自动发送：`LIST "中文 目录名"`（带双引号）
-- Serv-U v10.3 不识别带引号路径，返回 0 字节
-- 目录无法进入，中文带空格目录访问失败
-- curlftpfs 正常（发送 `LIST 中文 目录名` 不带双引号）
+### 问题描述
+在访问 Serv-U FTP Server v10.3 时，当目录名包含中文和空格（如 "13 公用上传文件夹"），rclone 无法进入子目录。原因是 Serv-U v10 不支持 LIST 命令中带双引号的路径参数。
 
-### 根源
-`jlaffaye/ftp` 库中的 `quotePathInCommand()` 函数在路径含空格/中文时自动加双引号。
+### 问题根因
+`vendor/github.com/jlaffaye/ftp` 库中，`cmd()` 和 `cmdDataConnFrom()` 方法只检查了 `c.options.disablePathQuoting`（连接建立时设置），但没有检查 `c.ftpOptions.DisablePathQuoting`（通过 `SetOptions` 登录后设置）。导致 `fix_servu_list_quotes=true` 配置虽然传到底层库，但实际生成 LIST 命令时未生效。
 
-## 解决方案
+### 修改文件
+- `vendor/github.com/jlaffaye/ftp/ftp.go` — 底层 FTP 客户端库
 
-新增 FTP 后端配置项：**`fix_servu_list_quotes`**
+### 修改内容
+在 `cmd()` 和 `cmdDataConnFrom()` 方法中，增加对 `c.ftpOptions.DisablePathQuoting` 的检查：
 
-- `fix_servu_list_quotes = true` → 开启 Serv-U 兼容模式（不加引号）
-- `fix_servu_list_quotes = false`（默认）→ 保持 rclone 原始行为
+```go
+// 修改前：
+line = quotePathInCommand(line, c.options.disablePathQuoting)
 
-## 修改的文件
-
-| 文件 | 修改内容 |
-|------|---------|
-| `vendor/github.com/jlaffaye/ftp/conn.go` | `Options` 结构体新增 `DisablePathQuoting` 字段；`quotePathInCommand()` 函数新增 `disableQuoting` 参数 |
-| `vendor/github.com/jlaffaye/ftp/ftp.go` | `dialOptions` 结构体新增 `disablePathQuoting` 字段；`cmd()` 和 `cmdDataConnFrom()` 方法传递开关值 |
-| `backend/ftp/ftp.go` | `Options` 结构体新增 `FixServuListQuotes` 字段；`init()` 中注册配置项；`ftpConnection()` 中传递配置 |
-
-## 编译方法（Ubuntu 22.04）
-
-```bash
-cd /path/to/rclone
-go build -o rclone ./
+// 修改后：
+disableQuoting := c.options.disablePathQuoting
+if c.ftpOptions != nil && c.ftpOptions.DisablePathQuoting {
+    disableQuoting = true
+}
+line = quotePathInCommand(line, disableQuoting)
 ```
 
-或使用 make：
+### 效果
+- `--ftp-fix-servu-list-quotes=true` 时：**所有** FTP 命令（LIST、CWD、RETR、STOR 等）的路径参数都不加双引号
+- `--ftp-fix-servu-list-quotes=false`（默认）：完全保留原生逻辑，不影响其他用户
 
+### 使用方式
 ```bash
-cd /path/to/rclone
-make
-```
+# 命令行使用
+./rclone lsd ftp:/ --ftp-fix-servu-list-quotes
 
-## 配置示例
-
-在 `rclone.conf` 中添加：
-
-```ini
-[servu]
+# 或者在配置中设置
+[remote]
 type = ftp
-host = 192.168.1.100
-user = username
-pass = password
-charset = GBK
+host = your-servu-server
 fix_servu_list_quotes = true
 ```
 
-## 测试方法
+## 编译说明
 
+### ARM64 架构
 ```bash
-# 列出根目录
-./rclone lsd servu:
-
-# 进入中文带空格目录
-./rclone lsd "servu:/中文 目录名"
-
-# 同步测试
-./rclone sync "servu:/中文 目录名" /local/test
+go build -buildvcs=false -o rclone-arm64
 ```
 
-## 设计原则
+### x86_64 架构（交叉编译）
+```bash
+GOOS=linux GOARCH=amd64 go build -buildvcs=false -o rclonex84
+```
 
-1. **最小侵入式**：只修改 3 个文件，新增约 20 行代码
-2. **默认行为不变**：`fix_servu_list_quotes = false` 时完全保持 rclone 原始行为
-3. **不影响其他 FTP 服务器**：只有显式开启此选项才会改变行为
-4. **保留所有原有功能**：GBK、charset、encoding、disable_utf8 等全部不受影响
-5. **开关可随时切换**：无需重新编译，修改配置文件即可
-
-## 兼容性
-
-| 场景 | fix_servu_list_quotes=false | fix_servu_list_quotes=true |
-|------|:---:|:---:|
-| 普通 FTP 服务器（FileZilla、ProFTPD 等） | ✅ 正常 | ✅ 正常 |
-| Serv-U v10.3（GBK + 中文空格目录） | ❌ 失败 | ✅ 正常 |
-| 其他 FTP 服务器 | ✅ 正常 | ✅ 正常 |
+## 相关文件
+- `backend/ftp/ftp.go` — rclone FTP 后端（配置注册）
+- `vendor/github.com/jlaffaye/ftp/ftp.go` — 底层 FTP 客户端库（修复位置）
+- `vendor/github.com/jlaffaye/ftp/conn.go` — FTP 连接选项定义
